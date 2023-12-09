@@ -26,6 +26,22 @@ services:
         - "5432:5432"
     volumes:
         - postgres_data:/var/lib/postgresql/data/ 
+ 
+  orderdb:
+    container_name: orderdb
+    environment:
+      SA_PASSWORD: "SwN12345678"
+      ACCEPT_EULA: "Y"
+    restart: always
+    ports:
+        - "1433:1433" 
+
+  rabbitmq:
+    container_name: rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
 
   pgadmin:
     container_name: pgadmin
@@ -54,6 +70,8 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - "DatabaseSettings:ConnectionString=mongodb://catalogdb:27017/CatalogDb"
       - ASPNETCORE_HTTP_PORTS=8080
+      - "CorsPolicy:OcelotApiGwUrl=http://ocelotapigw:8080"
+      - "CorsPolicy:ShoppingAggregatorUrl=http://shopping.aggregator:8080"
     depends_on:
        - catalogdb
     ports:
@@ -64,11 +82,16 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_HTTP_PORTS=8080
-      - "CacheSettings:ConnectionString=basketdb:6379" 
+      - "CacheSettings:ConnectionString=basketdb:6379"
+      - "GrpcSettings:DiscountUrl=http://discount.grpc:8080"
+      - "EventBusSettings:HostAddress=amqp://guest:guest@rabbitmq:5672"
+      - "CorsPolicy:OcelotApiGwUrl=http://ocelotapigw:8080"
+      - "CorsPolicy:ShoppingAggregatorUrl=http://shopping.aggregator:8080"
     ports:
       - "8001:8080"
     depends_on:
       - basketdb
+      - rabbitmq
 
   discount.api:
     container_name: discount.api
@@ -80,4 +103,64 @@ services:
       - "8002:8080"
     depends_on:
       - discountdb
+
+
+  discount.grpc:
+    container_name: discount.grpc
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=8080
+      - "DatabaseSettings:ConnectionString=Server=discountdb;Port=5432;Database=DiscountDb;User Id=admin;Password=admin1234;"
+    depends_on:
+      - discountdb
+    ports:
+      - "8003:8080"
+
+
+  ordering.api:
+    container_name: ordering.api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=8080
+      - "ConnectionStrings:OrderingConnectionString=Server=orderdb,1433;Database=OrderDb;User Id=sa;Password=SwN12345678;TrustServerCertificate=true"
+      - "EventBusSettings:HostAddress=amqp://guest:guest@rabbitmq:5672"
+      - "CorsPolicy:OcelotApiGwUrl=http://ocelotapigw:8080"
+      - "CorsPolicy:ShoppingAggregatorUrl=http://shopping.aggregator:8080"
+    depends_on:
+      - orderdb
+      - rabbitmq
+    ports:
+      - "8004:8080"
+
+
+  ocelotapigw:
+    container_name: ocelotapigw
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=8080
+    depends_on:
+      - catalog.api
+      - basket.api
+      - discount.api
+      - ordering.api
+    ports:
+      - "8010:8080"
+
+
+  shopping.aggregator:
+    container_name: shopping.aggregator
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=8080
+      - "ApiSettings:CatalogUrl=http://catalog.api:8080"
+      - "ApiSettings:BasketUrl=http://basket.api:8080"
+      - "ApiSettings:OrderingUrl=http://ordering.api:8080"
+    depends_on:
+      - ocelotapigw
+      - catalog.api
+      - basket.api
+      - discount.api
+      - ordering.api
+    ports:
+      - "8005:8080"
 

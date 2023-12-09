@@ -27,6 +27,8 @@ namespace Discount.Grpc.Services
                     new Status(StatusCode.NotFound, $"Discount with ProductName={request.ProductName} not found")
                     );
 
+            _logger.LogInformation("Discount is retrieved for ProductName : {productName}, Amount : {amount}", coupon.ProductName, coupon.Amount);
+
             return coupon.ToCouponModel();
         }
 

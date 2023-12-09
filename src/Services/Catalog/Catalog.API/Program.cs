@@ -15,14 +15,31 @@ builder.Services.AddSwaggerGen(c =>
 });
 builder.Services.AddScoped<ICatalogContext, CatalogContext>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
+builder.Services.AddCors(options =>
+{
+    var apiGw = builder.Configuration.GetValue<string>("CorsPolicy:OcelotApiGwUrl");
+    var shoppingAggregator = builder.Configuration.GetValue<string>("CorsPolicy:ShoppingAggregatorUrl");
+    options.AddPolicy($"Development",
+        builder => builder.WithOrigins(apiGw, shoppingAggregator)
+                          .WithMethods("GET", "PUT", "POST", "DELETE")
+                          .AllowAnyHeader());
+    options.AddPolicy($"Production",
+        builder => builder.WithOrigins(apiGw, shoppingAggregator)
+                          .WithMethods("GET", "PUT", "POST", "DELETE")
+                          .AllowAnyHeader());
+});
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
+    app.UseCors("Development");
     app.UseSwagger();
     app.UseSwaggerUI();
+}else
+{
+    app.UseCors($"{app.Environment.EnvironmentName}");
 }
 
 app.UseAuthorization();
